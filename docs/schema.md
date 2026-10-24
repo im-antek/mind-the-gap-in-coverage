@@ -7,7 +7,8 @@ The backend writes a single SQLite file (`/data/mtg.db` in the cluster). The DDL
 - The DB runs in **WAL mode**, so readers never block the writers. Open it **read-only**, e.g. with the `modernc.org/sqlite` DSN:
   `file:/data/mtg.db?mode=ro&_pragma=busy_timeout(5000)`.
 - In k8s, mount the `mtg-data` PVC (namespace `mind-the-gap`) with `readOnly: true`. The cluster has a single node, so mounting the ReadWriteOnce volume works.
-- Data lands **once per night**, at about 02:30 London time, for the previous service day. Nothing for today shows up until tomorrow.
+- `arrivals` and `etl_runs` land **once per night**, at about 02:30 London time, for the previous service day. Nothing for today shows up there until tomorrow.
+- `vehicle_observations` is the live source, updated on every poll (about every 30s). Pruned after about 5 days.
 
 ## Formats
 
@@ -71,8 +72,25 @@ GROUP BY station_name;
 - `stations(naptan_id, name, lat, lon)`: for maps and station pickers.
 - `route_stops(line_id, direction, route_idx, seq, naptan_id)`: the ordered stops per line route. Useful for drawing a line diagram.
 
+### `vehicle_observations`: live data
+One row per train trip approaching a station, updated on every poll.
+
+**Short-lived:** the poller deletes rows after about 5 days. Use this table for live data only. Use `arrivals` for history.
+
+| Column | Type | Notes |
+|---|---|---|
+| `service_date`, `line_id`, `naptan_id`, `direction`, `trip_key` | TEXT | PK. `trip_key` is the vehicle plus a first-seen marker, so repeat visits stay separate |
+| `line_name`, `mode`, `station_name` | TEXT | |
+| `platform` | TEXT | May be `''` |
+| `vehicle_id` | TEXT | May be `''` |
+| `destination` | TEXT | May be `''` |
+| `first_seen_at`, `last_seen_at` | TEXT | First and latest poll that saw this trip |
+| `first_expected_arrival`, `last_expected_arrival` | TEXT | Predicted arrival at first and latest sighting |
+| `min_time_to_station` | INTEGER | Seconds; `<= 60` means the train arrived |
+
+Indexed on `(last_seen_at)`.
+
 ## Internal tables (do not build on these)
-- `vehicle_observations`: raw polling state, deleted after about 5 days.
 - `timetable_journeys`, `timetable_intervals`: the raw timetable, expanded by the ETL.
 
 These can change shape without notice.

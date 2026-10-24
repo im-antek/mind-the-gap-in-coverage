@@ -64,8 +64,8 @@ CREATE TABLE timetable_intervals (
 );
 
 -- ---------------------------------------------------------------------------
--- Raw observations (written by cmd/poller, pruned after RAW_RETENTION_DAYS)
--- Internal to the backend; the API should not depend on this table.
+-- Live observations (written by cmd/poller, pruned after RAW_RETENTION_DAYS)
+-- Live data for the API. Short-lived: do not rely on history beyond the retention window.
 -- ---------------------------------------------------------------------------
 
 -- One row per train trip approaching a station, updated on every poll.
